@@ -17,15 +17,14 @@ class Processor:
             return json.load(f)
 
     @staticmethod
-    def divided_data(config) -> tuple[
-        list[Any], dict[str, list[dict]], dict[str, list[dict]], dict[str, list[dict]]]:
+    def divided_data(config) -> tuple[list[Any], dict[Any, Any], dict[Any, Any]]:
         """划分数据集为训练/验证/测试集"""
-        raw_data = Processor.load_data(config.file_path)
+        raw_data = Processor.load_data(config.data_file)
 
         train_data = {}
         dev_data = {}
         test_data = {}
-        all_relations = []
+        all_relations = set()
 
         # 遍历每个关系类型的数据
         for relation, samples in tqdm(raw_data.items(), desc="Processing relations"):
@@ -33,23 +32,19 @@ class Processor:
                 # FewRel 数据集划分逻辑
                 test_split = config.num_of_train_samples + config.num_of_val_samples
                 train_samples = samples[:config.num_of_train_samples]
-                dev_samples = samples[config.num_of_train_samples:test_split]
                 test_samples = samples[test_split:]
             else:
                 # TACRED 默认划分逻辑
                 test_size = min(len(samples) // 5, 40)
-                train_size = min(320, len(samples) - test_size)  # 防止越界
-
                 test_samples = samples[:test_size]
-                train_samples = samples[test_size:test_size + train_size]
-                dev_samples = samples[test_size + train_size:]  # 剩余作为验证集
+                train_samples = samples[test_size:test_size + 320]
+                dev_samples = None
 
             train_data[relation] = train_samples
-            dev_data[relation] = dev_samples
             test_data[relation] = test_samples
-            all_relations.extend(relation)
+            all_relations.add(relation)
 
-        return all_relations, train_data, dev_data, test_data  # 修正返回结构
+        return list(all_relations), train_data, test_data
 
 
 class RelationDataset(Dataset):
@@ -61,9 +56,6 @@ class RelationDataset(Dataset):
         self.data = data
         self.tokenizer = tokenizer
         self.relation_to_id = relation_to_id
-        # 预验证数据格式
-        assert all('relation' in item and 'tokens' in item for item in data)
-        assert all(relation in relation_to_id for item in data for relation in [item['relation']])
 
     def __len__(self) -> int:
         """返回数据集的大小，即数据样本的数量"""
@@ -75,7 +67,7 @@ class RelationDataset(Dataset):
 
         item = self.data[idx]
         encoding = self.tokenizer(
-            ' '.join(item.tokens),
+            ' '.join(item['tokens']),
             max_length=256,
             padding='max_length',
             truncation=True,
