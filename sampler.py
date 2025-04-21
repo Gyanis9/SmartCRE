@@ -17,10 +17,10 @@ class Processor:
             return json.load(f)
 
     @staticmethod
-    def divided_data(config, file_path: str) -> tuple[
+    def divided_data(config) -> tuple[
         list[Any], dict[str, list[dict]], dict[str, list[dict]], dict[str, list[dict]]]:
         """划分数据集为训练/验证/测试集"""
-        raw_data = Processor.load_data(file_path)
+        raw_data = Processor.load_data(config.file_path)
 
         train_data = {}
         dev_data = {}
